@@ -1,6 +1,9 @@
+import pandas as pd
 import os
 import requests
 from dotenv import load_dotenv
+from datetime import datetime
+from sqlalchemy import create_engine
 
 # 1. Load environment variables from .env file
 load_dotenv()
@@ -37,8 +40,64 @@ def fetch_crypto_prices():
         print(f"An error occurred: {e}")
         return None
     
+
+def transform_data(raw_data):
+    # Transform the raw data into a pandas DataFrame
+
+    if not raw_data:
+        return pd.DataFrame()
+    
+    cleaned_records = []
+
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    for coin_id, values in raw_data.items():
+        record = {
+            "timestamp": current_time,
+            "coin_id": coin_id,
+            "price_usd": values.get("usd", None)
+        }
+        cleaned_records.append(record)
+
+    df = pd.DataFrame(cleaned_records)
+    return df
+
+
+def load_data(df):
+    # loads the pandas DataFrame into a SQLite database
+
+    if df is None or df.empty:
+        print("No data to load.")
+        return
+    
+    # 1. Create a SQLAlchemy engine to connect to the SQLite database
+    engine = create_engine('sqlite:///crypto_prices.db')
+
+    # 2. Load the DataFrame into the database (creates a new table or appends to it)
+    df.to_sql(name='prices', con=engine, if_exists='append', index=False)
+    print("--- Data Successfully Loaded into SQLite! ---")
+
+
 if __name__ == "__main__":
-    prices = fetch_crypto_prices()
-    if prices:
-        print("--- API Connection Successful ---")
-        print(prices)
+    print("--- Starting ETL Pipeline ---")
+
+    raw_prices = fetch_crypto_prices()
+
+    if raw_prices:
+        print("1. Extraction Successful!")
+        
+
+        df_cleaned = transform_data(raw_prices)
+        print("2. Transformation Successful!")
+        print(df_cleaned)
+
+        print("3. Attempting to Load Data into Database...")
+        try:
+            engine = create_engine('sqlite:///crypto_prices.db')
+            df_cleaned.to_sql(name='prices', con=engine, if_exists='append', index=False)
+            print("--- Data Successfully Loaded into SQLite! ---")
+        except Exception as e:
+            print(f"--- An error occurred while loading data: {e} ---")
+        
+    else:
+        print("--- FAILURE: Extraction failed, raw_prices is empty. ---")

@@ -46,3 +46,6 @@ Thumbs.db
 
 # Project specific
 *.log
+
+crypto_data.db
+crypto_prices.db
